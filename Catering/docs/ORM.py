@@ -32,6 +32,7 @@ class DatabaseConnection:
     def query(self, sql: str, params: tuple | None = None):
         self.cur.execute(sql, params or ())
         return self.cur.fetchall()
+    
 
 
 @dataclass
