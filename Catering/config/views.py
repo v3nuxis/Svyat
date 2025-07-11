@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import User, Dish, Order, OrderItem
+from users.models import User, Dish, Order, OrderItem
 from .serializers import UserSerializer, DishSerializer, OrderSerializer, OrderItemSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
