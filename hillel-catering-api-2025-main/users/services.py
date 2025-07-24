@@ -69,6 +69,16 @@ class ActivationService:
         # User.objects.filter(id=user...).update(is_active=True)
 
     def resend_activation_link(self, email: str) -> None:
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise ValueError("User with this email does not exist")
+        
+        if user.is_active:
+            raise ValueError("User is already existed")
+        activation_key = self.create_activation_key()
+        self.email = email
+        self.save_activation_information(user_id=user.id, activation_key=activation_key)
+        self.send_user_activation_email(activation_key=activation_key)
+            
         """Send user activation link to specified email."""
-
-        raise NotImplementedError

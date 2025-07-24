@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 
 
 class Role(StrEnum):
@@ -23,17 +24,26 @@ class Role(StrEnum):
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, email: str, password: str, **extra_fields):
+    def create_user(self, email: str, password: str, **extra_fields,):
         """Create and save a USER with passed parameters."""
-
-        email = self.normalize_email(email)
+        
+        email = self.normalize_email(email) 
         password = make_password(password)
 
         extra_fields["is_active"] = False
         extra_fields["is_staff"] = False
         extra_fields["is_superuser"] = False
         extra_fields["role"] = Role.CUSTOMER
-
+        
+        
+        send_mail(
+            subject="Activate your account",
+            message=f"Use this key-code to activate your account {activation_key}",
+            from_email="admin@myproject.com",
+            recipient_email=[user.email]
+            
+            
+        )
         # aka User(...)
         user = self.model(email=email, password=password, **extra_fields)
         user.save()
@@ -41,7 +51,7 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email: str, password: str, **extra_fields):
-        """Create and save a SUPERUSER with passed parameters."""
+        """Create and save a SUPERUSER with passed paramete rs."""
 
         email = self.normalize_email(email)
         password = make_password(password)
@@ -68,7 +78,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=50, null=False)
 
     is_staff = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
 
     role = models.CharField(
         max_length=50, default=Role.CUSTOMER, choices=Role.choices()

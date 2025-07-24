@@ -1,5 +1,8 @@
 from typing import Any
-
+from rest_framework.views import APIView
+from rest_framework import status
+from django.core.cache import cache
+from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from rest_framework import permissions, routers, serializers, viewsets
 from rest_framework.request import Request
@@ -72,6 +75,7 @@ class UsersAPIViewSet(viewsets.GenericViewSet):
         activation_service.send_user_activation_email(activation_key=activation_key)
 
         return Response(UserSerializer(serializer.instance).data, status=201)
+    
 
     @action(methods=["POST"], detail=False)
     def activate(self, request: Request) -> Response:
@@ -87,7 +91,38 @@ class UsersAPIViewSet(viewsets.GenericViewSet):
             raise ValidationError("Activation link expired") from error
 
         return Response(data=None, status=204)
+    
+    
+    
+    @action(methods=["POST"], detail=False)
+    def resend_activaton_link(self, email: str) -> None:
+        try:
+            User = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise ValueError("User with this email does not exist")
+        
+        if user.is_active:
+            raise ValueError("This user is already activated")
+        
+        activation_key= self.create_activation_key()
+        self.save_information(user_id=user.id, activation_key=activation_key)
+        self.email = email
+        self.send_user_activation_email(activation_key=activation_key)
+    
+    @action(methods=["POST"], detail=False)
+    def  resend_activation(self, Request: Request) -> None:
+        email = request.data.get('email')
 
-
+        if not email:
+            raise ValidationError("Email is required")
+        
+        activation_service=ActivationService()
+        try:
+            activation_service.send_user_activation_link(email=email)
+        except ValueError as error:
+            raise ValueError(str(error))
+        return Response(data={"message": "Activation link has been resent succesfully!"}, status=200)
+        
+        
 router = routers.DefaultRouter()
 router.register(r"", UsersAPIViewSet, basename="user")
