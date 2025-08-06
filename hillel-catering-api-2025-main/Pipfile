@@ -8,6 +8,7 @@ django = "~=5.2.3"  # web framework
 djangorestframework = "~=3.16.0"  # REST batteries
 djangorestframework-simplejwt = "~=5.5.0"  # JWT Authentication
 redis = "~=6.2.0" # Caching
+psycopg2-binary = "~=2.9.10"
 
 [dev-packages]
 flake8="~=7.3.0"  # code quality
@@ -19,4 +20,4 @@ django-stubs = { version = "~=5.2.1", extras=["compatible-mypy"] }
 djangorestframework-stubs = { version = "~=3.16.0", extras=["compatible-mypy"] }
 
 [requires]
-python_version = "3.11"
+python_version = "3.13"
