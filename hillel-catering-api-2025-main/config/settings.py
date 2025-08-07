@@ -29,6 +29,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+ACTIVATION_LINK = ('ACTIVATION_LINK', default = 'http://localhost:8000/activate/')
 
 # Application definition
 
