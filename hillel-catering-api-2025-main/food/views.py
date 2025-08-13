@@ -1,49 +1,30 @@
-import io
 import csv
-from typing import Any
+import io
 from datetime import date
+from typing import Any
 
-from django.utils.decorators import method_decorator
-from django.shortcuts import redirect
 from django.db import transaction
-from rest_framework import permissions, routers, serializers, viewsets, generics
+from django.shortcuts import redirect
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from rest_framework import permissions, routers, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
-from django.views.decorators.cache import cache_page
-
-from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.pagination import PageNumberPagination
-
 
 from users.models import Role, User
-from .models import Dish, Order, OrderItem, OrderStatus, Restaurant
+
 from .enums import DeliveryProvider
+from .models import Dish, Order, OrderItem, OrderStatus, Restaurant
+from .services import schedule_order
 
-
-class DishPagination(LimitOffsetPagination):
-    default_limit = 10
-    max_limit = 100
-    
-class DishListView(generics.ListAPIView):
-    serializer_class = DishSerializer
-    pagination_class = DishPagination
-    permission_classes = [permissions.IsAdminUser]
-
-def get_queryset(self):
-    query_set = Dish.objects.all()
-    name = self.request.query_params.get("name")
-    if "name":
-        query_set = query_set.filter(name_icontains=name)
-    return query_set
 
 class DishSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dish
         exclude = ["restaurant"]
-        fiels = "__all__"
 
 
 class RestaurantSerializer(serializers.ModelSerializer):
@@ -87,6 +68,10 @@ class OrderSerializer(serializers.Serializer):
             raise ValidationError("ETA must be min 1 day after today.")
         else:
             return value
+
+
+class KFCOrderSerializer(serializers.Serializer):
+    pass
 
 
 class IsAdmin(permissions.BasePermission):
@@ -176,9 +161,14 @@ class FoodAPIViewSet(viewsets.GenericViewSet):
         # time.sleep(3)
         return Response(data=serializer.data)
 
+    # HTTP GET /food/orders/4
+    @action(methods=["get"], detail=False, url_path=r"orders/(?P<id>\d+)")
+    def retrieve_order(self, request: Request, id: int) -> Response:
+        order = Order.objects.get(id=id)
+        serializer = OrderSerializer(order)
+        return Response(data=serializer.data)
+
     # HTTP POST /food/orders/
-    # @transaction.atomic   <-- also available
-    @action(methods=["post"], detail=False, url_path=r"orders")
     def create_order(self, request: Request) -> Response:
         serializer = OrderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -196,7 +186,6 @@ class FoodAPIViewSet(viewsets.GenericViewSet):
 
             items = serializer.validated_data["items"]
             for dish_order in items:
-                raise ValueError("some error occured")
                 instance = OrderItem.objects.create(
                     dish=dish_order["dish"],
                     quantity=dish_order["quantity"],
@@ -206,18 +195,10 @@ class FoodAPIViewSet(viewsets.GenericViewSet):
 
         print(f"New Food Order is created: {order.pk}. ETA: {order.eta}")
 
-        # TODO: Run scheduler
+        schedule_order(order)
 
         return Response(OrderSerializer(order).data, status=201)
 
-    # HTTP GET /food/orders/4
-    @action(methods=["get"], detail=False, url_path=r"orders/(?P<id>\d+)")
-    def retrieve_order(self, request: Request, id: int) -> Response:
-        order = Order.objects.get(id=id)
-        serializer = OrderSerializer(order)
-        return Response(data=serializer.data)
-
-    @action(methods=["get"], detail=False, url_path=r"orders")
     def all_orders(self, request: Request) -> Response:
         # filters = FoodFilters(**request.query_params.dict())
         # status: str | None = request.query_params.get("status")
@@ -240,6 +221,13 @@ class FoodAPIViewSet(viewsets.GenericViewSet):
 
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)
+
+    @action(methods=["get", "post"], detail=False, url_path=r"orders")
+    def orders(self, request: Request) -> Response:
+        if request.method == "POST":
+            return self.create_order(request)
+        else:
+            return self.all_orders(request)
 
 
 def import_dishes(request):
@@ -273,3 +261,13 @@ def import_dishes(request):
 
 router = routers.DefaultRouter()
 router.register(prefix="", viewset=FoodAPIViewSet, basename="food")
+
+# /food/
+
+
+# HTTP Resource
+# POST /users
+# GET /users
+# GET /users/ID
+# PUT /users/ID
+# DELETE /users/ID
