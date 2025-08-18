@@ -2,7 +2,11 @@ import enum
 from dataclasses import dataclass, asdict
 
 import httpx
+from food.tasks import order_in_silpo
 
+class SilpoOrder:
+    def create_order(self, order_data):
+        order_in_silpo.apply_async(args=(order_data,), priority=10)
 
 class OrderStatus(enum.StrEnum):
     NOT_STARTED = "not started"

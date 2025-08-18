@@ -52,39 +52,8 @@ CMD [ "manage.py", "runserver", "0.0.0.0:8000" ]
 
 FROM base AS prod
 
-RUN pipenv install install --deploy --system
+RUN pipenv install --deploy --system
 
 EXPOSE 8000/tcp
 ENTRYPOINT [ "python" ]
 CMD [ "-m", "gunicorn", "config.wsgi:application" ]
-
-
-# ==============================================
-# MULTI-STAGE BUILDS FOR PROVIDERS
-# ==============================================
-
-FROM base AS silpo
-
-RUN pipenv install sync --dev --system
-
-EXPOSE 8000/tcp
-ENTRYPOINT [ "python" ]
-CMD [ "-m", "uvicorn", "tests.providers.silpo:app", "--host", "0.0.0.0"]
-
-
-FROM base AS kfc
-
-RUN pipenv install sync --dev --system
-
-EXPOSE 8000/tcp
-ENTRYPOINT [ "python" ]
-CMD [ "-m", "uvicorn", "tests.providers.kfc:app", "--host", "0.0.0.0"]
-
-
-FROM base AS uklon
-
-RUN pipenv install sync --dev --system
-
-EXPOSE 8000/tcp
-ENTRYPOINT [ "python" ]
-CMD [ "-m", "uvicorn", "tests.providers.uklon:app", "--host", "0.0.0.0"]

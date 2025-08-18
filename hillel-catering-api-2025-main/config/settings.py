@@ -155,6 +155,7 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": os.getenv("DJANGO_CACHE_URL", default="redis://cache:6379/0"),
+        "TIMEOUT": None, # Посмотрел все сайты где в основном пишут код, с временем жизни, правильно ли я написал?
     }
 }
 

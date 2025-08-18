@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.db import models
 
-
 from .enums import OrderStatus
 
 
@@ -45,7 +44,7 @@ class Order(models.Model):
     def __str__(self) -> str:
         return f"[{self.pk}] {self.status} for {self.user.email}"
 
-    def items_by_restaurant(self) -> dict["Restaurant", models.QuerySet["OrderItem"]]:
+    def items_by_restaurant(self) -> dict[Restaurant, models.QuerySet["OrderItem"]]:
         results = {}
 
         # get all items for this order, optimize the query
@@ -58,6 +57,18 @@ class Order(models.Model):
             results[restaurant] = qs.filter(dish__restaurant=restaurant)
 
         return results
+
+    def delivery_meta(self) -> tuple[str, str]:
+        """Return addresses without duplicates."""
+
+        return (
+            self.items.select_related("dish__restaurant")
+            .values_list(
+                "dish__restaurant__name",
+                "dish__restaurant__address",
+            )
+            .distinct()
+        )
 
 
 class OrderItem(models.Model):

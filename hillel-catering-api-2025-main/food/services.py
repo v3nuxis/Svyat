@@ -1,13 +1,16 @@
+from dataclasses import asdict, dataclass, field
+from threading import Thread
 from time import sleep
-from dataclasses import dataclass, field, asdict
+
 from django.db.models import QuerySet
 
+from config import celery_app
 from shared.cache import CacheService
 
-from .models import Order, Restaurant, OrderItem
 from .enums import OrderStatus
-from .providers import silpo
 from .mapper import RESTAURANT_EXTERNAL_TO_INTERNAL
+from .models import Order, OrderItem, Restaurant
+from .providers import kfc, silpo, uklon
 
 
 @dataclass
@@ -40,7 +43,7 @@ class TrackingOrder:
 def all_orders_cooked(order_id: int):
     cache = CacheService()
     tracking_order = TrackingOrder(**cache.get(namespace="orders", key=str(order_id)))
-    print(f"Checking if al lorders are cooked: {tracking_order.restaurants}")
+    print(f"Checking if al orders are cooked: {tracking_order.restaurants}")
 
     results = all(
         (
@@ -52,6 +55,7 @@ def all_orders_cooked(order_id: int):
     return results
 
 
+@celery_app.task(queue="high_priority")
 def order_in_silpo(order_id: int, items: QuerySet[OrderItem]):
     """Short polling requests to the Silpo API
 
@@ -102,14 +106,20 @@ def order_in_silpo(order_id: int, items: QuerySet[OrderItem]):
                 "external_id": response.id,
                 "status": internal_status,
             }
+            print(
+                f"Created Silpo Order. External ID: {response.id}, Status: {internal_status}"
+            )
             cache.set(
                 namespace="orders", key=str(order_id), value=asdict(tracking_order)
             )
         else:
             # ✨ IF ALREADY HAVE EXTERNAL ID - JUST RETRIEVE THE ORDER
-            response = client.get_order(order_id)
+            response = client.get_order(silpo_order["external_id"])
             internal_status = get_internal_status(response.status)
-            print("Tracking for Silpo Order with HTTP GET /orders")
+
+            print(
+                f"Tracking for Silpo Order with HTTP GET /api/orders. Status: {internal_status}"
+            )
 
             if silpo_order["status"] != internal_status:  # STATUS HAS CHANGED
                 tracking_order.restaurants[str(restaurant.pk)][
@@ -119,6 +129,11 @@ def order_in_silpo(order_id: int, items: QuerySet[OrderItem]):
                 cache.set(
                     namespace="orders", key=str(order_id), value=asdict(tracking_order)
                 )
+
+                # if started cooking
+                if internal_status == OrderStatus.COOKING:
+                    Order.objects.filter(id=order_id).update(status=OrderStatus.COOKING)
+
             if internal_status == OrderStatus.COOKED:
                 print("🍳 ORDER IS COOKED")
                 cooked = True
@@ -131,13 +146,114 @@ def order_in_silpo(order_id: int, items: QuerySet[OrderItem]):
                         value=asdict(tracking_order),
                     )
 
-                    # TODO: 💣 UPDATE DATABASE INSTANCE
+                    Order.objects.filter(id=order_id).update(status=OrderStatus.COOKED)
 
 
+@celery_app.task(queue="default")
 def order_in_kfc(order_id: int, items):
-    pass
+    client = kfc.Client()
+    cache = CacheService()
+    restaurant = Restaurant.objects.get(name="KFC")
+
+    def get_internal_status(status: kfc.OrderStatus) -> OrderStatus:
+        return RESTAURANT_EXTERNAL_TO_INTERNAL["kfc"][status]
+
+    # GET ITEM FROM THE CACHE
+    tracking_order = TrackingOrder(**cache.get(namespace="orders", key=str(order_id)))
+
+    response: kfc.OrderResponse = client.create_order(
+        kfc.OrderRequestBody(
+            order=[
+                kfc.OrderItem(dish=item.dish.name, quantity=item.quantity)
+                for item in items
+            ]
+        )
+    )
+    internal_status: OrderStatus = get_internal_status(response.status)
+
+    # UPDATE CACHE WITH EXTERNAL ID AND STATE
+    tracking_order.restaurants[str(restaurant.pk)] |= {
+        "external_id": response.id,
+        "status": internal_status,
+    }
+    print(f"KFC Silpo Order. External ID: {response.id}, Status: {internal_status}")
+
+    print(f"Created KFC Order. External ID: {response.id}, Status: {response.status}")
+    cache.set(namespace="orders", key=str(order_id), value=asdict(tracking_order))
+
+    # save another item for MAPPING to the INTERNAL ORDER
+    cache.set(
+        namespace="kfc_orders",
+        key=response.id,  # external KFC ID
+        value={
+            "internal_order_id": order_id,
+        },
+    )
+
+    if all_orders_cooked(order_id):
+        cache.set(namespace="orders", key=str(order_id), value=asdict(tracking_order))
+        Order.objects.filter(id=order_id).update(status=OrderStatus.COOKED)
 
 
+@celery_app.task
+def order_delivery(order_id: int):
+    """Using random provider - start processing delivery orders."""
+
+    print(f"🚚 DELIVERY PROCESSING STARTED")
+
+    provider = uklon.Provider()
+    cache = CacheService()
+    order = Order.objects.get(id=order_id)
+
+    # update order state
+    order.status = OrderStatus.DELIVERY_LOOKUP
+    order.save()
+
+    # prepare data for the first request
+    addresses: list[str] = []
+    comments: list[str] = []
+    for rest_name, address in order.delivery_meta():
+        addresses.append(rest_name)
+        comments.append(f"Delivery to the {address}")
+
+    # NOTE: Only UKLON is currently supported so no selection in here
+    #       just update the state here since we know the provider
+    order.status = OrderStatus.DELIVERY
+    order.save()
+
+    _response: uklon.OrderResponse = provider.create_order(
+        uklon.OrderRequestBody(addresses=addresses, comments=comments)
+    )
+
+    # update the cache
+    tracking_order = TrackingOrder(**cache.get("orders", str(order_id)))
+    tracking_order.delivery["location"] = _response.location
+
+    # initial status
+    current_status: uklon.OrderStatus = _response.status
+
+    while current_status != uklon.OrderStatus.DELIVERED:
+        response: uklon.OrderResponse = provider.get_order(_response.id)
+
+        print(f"🚙 UKLON [{response.status}]: 📍 {response.location}")
+        if current_status == response.status:
+            sleep(1)
+            continue
+
+        current_status = response.status  # DELIVERY, DELIVERED
+        tracking_order.delivery["location"] = response.location
+
+        # update cache
+        cache.set("orders", str(order_id), asdict(tracking_order))
+
+    print(f"🏁 UKLON [{response.status}]: 📍 {response.location}")
+
+    # update storage
+    Order.objects.filter(id=order_id).update(status=OrderStatus.DELIVERED)
+
+    # update the cache
+    tracking_order.delivery["status"] = OrderStatus.DELIVERED
+    cache.set("orders", str(order_id), asdict(tracking_order))
 
 
 def schedule_order(order: Order):
@@ -160,9 +276,9 @@ def schedule_order(order: Order):
     for restaurant, items in items_by_restaurants.items():
         match restaurant.name.lower():
             case "silpo":
-                order_in_silpo(order.pk, items)
+                order_in_silpo.delay(order_id=order.pk, items=items)
             case "kfc":
-                order_in_kfc(order.pk, items)
+                order_in_kfc.delay(order_id=order.pk, items=items)
             case _:
                 raise ValueError(
                     f"Restaurant {restaurant.name} is not available for processing"

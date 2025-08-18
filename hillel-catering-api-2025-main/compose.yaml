@@ -1,4 +1,17 @@
 services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./data/:/var/lib/rabbitmq/
+      - ./log/:/var/log/rabbitmq
+    restart: unless-stopped
+    environments:
+      RABBITMQ_DEFAULT_USER = v3nux
+      RABBITMQ_DEFAULT_PASS = 1234
   api:
     build: .
     # entrypoint: ..
@@ -28,26 +41,26 @@ services:
     ports:
       - "1025:1025" # http
       - "8025:8025" # smtp
-  silpo_mock:
+  silpo-mock:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
       target: silpo
     container_name: catering-silpo-mock
     ports:
       - "8001:8000"
-  kfc_mock:
+  kfc-mock:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
       target: kfc
     container_name: catering-kfc-mock
     ports:
       - "8002:8000"
-  uklon_mock:
+  uklon-mock:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
       target: uklon
     container_name: catering-uklon-mock
     ports:

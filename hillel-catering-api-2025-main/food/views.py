@@ -13,6 +13,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
+
 
 from users.models import Role, User
 
@@ -257,6 +259,43 @@ def import_dishes(request):
     print(f"{total} dishes uploaded to the database")
 
     return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+import json
+
+
+from shared.cache import CacheService
+
+from .models import Restaurant
+from .services import TrackingOrder, all_orders_cooked
+
+
+from django.http.response import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def kfc_webhook(request):
+    data: dict = json.loads(json.dumps(request.POST))
+
+    cache = CacheService()
+    kfc_cache_order: dict = cache.get(namespace="kfc_orders", key=data["id"])
+    restaurant = Restaurant.objects.get(name="KFC")
+
+    # get internal order  from the mapping
+    # add logging if order wasn't found
+    # NOTE: don't return any 404, etc, since now the Client is KFC Company, not the User
+    order: Order = Order.objects.get(id=kfc_cache_order["internal_order_id"])
+
+    # because KFC returns webhook only if finished
+    if all_orders_cooked(order.pk):
+        order.status = OrderStatus.COOKED
+        order.save()
+
+    # Mention that idea if needed
+    # Order.update_from_provider_status(id_=order.internal_order_id, status="finished")
+
+
+    return JsonResponse({"message": "ok"})
 
 
 router = routers.DefaultRouter()
