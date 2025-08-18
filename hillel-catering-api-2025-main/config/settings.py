@@ -159,6 +159,21 @@ CACHES = {
     }
 }
 
+CELERY_BROKER_URL = 'amqp://localhost' 
+CELERY_RESULT_BACKEND = 'django-db' 
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+CELERY_TASK_ROUTES = {
+    'hillel-catering.tasks.send_activation_email': {'queue': 'low_priority'},
+}
+
+CELERY_TASK_DEFAULT_QUEUE = 'low_priority'
+CELERY_TASK_DEFAULT_EXCHANGE = 'tasks'
+CELERY_TASK_DEFAULT_EXCHANGE_TYPE = 'topic'
+CELERY_TASK_DEFAULT_ROUTING_KEY = 'task.low_priority'
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", default="mailing")

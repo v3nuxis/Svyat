@@ -1,9 +1,11 @@
 import uuid
+from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
+from .tasks import send_activation_email
 from shared.cache import CacheService
 
-from django.core.mail import send_mail
-from .models import User
-
+User = get_user_model()
 
 class ActivationService:
     UUID_NAMESPACE = uuid.uuid4()
@@ -13,9 +15,6 @@ class ActivationService:
         self.cache: CacheService = CacheService()
 
     def create_activation_key(self):
-        # whether:
-        # key = uuid.uuid3(self.UUID_NAMESPACE, self.email)
-        # or
         return uuid.uuid4()
 
     def save_activation_information(self, user_id: int, activation_key: str):
@@ -44,12 +43,11 @@ class ActivationService:
             raise ValueError(f"No email specified for user activation process")
 
         # SMTP Client Send Email Request
-        activation_link = f"https://frontend.catering.com/activation/{activation_key}"
-        send_mail(
-            subject="User Activation",
-            message=f"Please, activate your account: {activation_link}",
-            from_email="admin@catering.com",
-            recipient_list=[self.email],
+        activation_link = f"https://frontend.catering.com/activation/{activation_key.strip()}"
+        
+        send_activation_email.delay(
+            email=self.email,
+            activation_link=activation_link
         )
 
     def activate_user(self, activation_key: str) -> None:

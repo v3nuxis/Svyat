@@ -13,6 +13,7 @@ from rest_framework.exceptions import ValidationError
 from django.conf import settings
 from .models import User
 from .services import ActivationService
+from .tasks import send_activation_email
 
 
 class UserSerializer(serializers.ModelSerializer):
