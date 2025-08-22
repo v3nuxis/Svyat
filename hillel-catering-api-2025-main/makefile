@@ -20,17 +20,22 @@ runserver:
 	pipenv run python manage.py runserver 0.0.0.0:8000
 
 worker_default:
-	celery -A config worker -Q default -l INFO
-
+	watchmedo auto-restart --recursive --pattern='*.py' -- celery -A config worker -l INFO -Q default
 
 worker_high:
-	celery -A config worker -Q high_priority -l INFO
+	watchmedo auto-restart --recursive --pattern='*.py' -- celery -A config worker -l INFO -Q high_priority
 
-silpo:
-	uvicorn tests.providers.silpo:app --reload --port 8001
+silpo_mock:
+	python -m uvicorn tests.providers.silpo:app --port 8001 --reload
 
-kfc:
-	uvicorn tests.providers.kfc:app --reload --port 8002
+kfc_mock:
+	python -m uvicorn tests.providers.kfc:app --port 8002 --reload
+
+uklon_mock:
+	python -m uvicorn tests.providers.uklon:app --port 8003 --reload
+
+uber_mock:
+	python -m uvicorn tests.providers.uber:app --port 8004 --reload
 
 # При обновлении, мейкфайл сразу коммититься
 update-makefile:
@@ -46,3 +51,4 @@ push:
 auto-update: update-makefile commit push
 
 dev: installdev runserver worker_default
+

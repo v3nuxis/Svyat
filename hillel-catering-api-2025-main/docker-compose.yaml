@@ -45,6 +45,17 @@ services:
         -db
         -redis  
         -mail
+      
+      uber:
+        build:
+          context: .
+          dockerfile: Dockerfile.test
+          target: uber
+        container_name: catering_uber
+        ports:
+          - "8004:8000"
+        depends_on:
+          - redis
 
 volumes:
   postgres.data:

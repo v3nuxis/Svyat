@@ -43,3 +43,10 @@ from base as uklon
 EXPOSE 8000
 ENTRYPOINT ["python"]
 CMD ["-m", "uvicorn", "uklon:app", "--host", "0.0.0.0"]
+
+# UBER
+from base as uber
+
+EXPOSE 8000
+ENTRYPOINT ["python"]
+CMD ["-m", "uvicorn", "uber:app", "--host", "0.0.0.0"]

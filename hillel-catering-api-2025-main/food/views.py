@@ -1,12 +1,17 @@
 import csv
+import json
 import io
 from datetime import date
 from typing import Any
 
+from django.views import View
+from django.http import JsonResponse
+from django.core.cache import cache
 from django.db import transaction
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+
 from rest_framework import permissions, routers, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -15,12 +20,16 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-
 from users.models import Role, User
-
 from .enums import DeliveryProvider
 from .models import Dish, Order, OrderItem, OrderStatus, Restaurant
 from .services import schedule_order
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from shared.cache import CacheService
+from food.enums import OrderStatus
+from food.models import Order, TrackingOrder
+from dataclasses import asdict
 
 
 class DishSerializer(serializers.ModelSerializer):
@@ -144,6 +153,18 @@ class FoodFilters(BaseFitlers):
                 raise ValidationError(f"Provider {provider} is not supported")
             else:
                 return _provider
+
+class UberWebhookView(View):
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        cache.set("courier_location", data, timeout=50) 
+        return JsonResponse({'status': "ok"})
+
+
+class CourierLocationView(View):
+    def get(self, request, *args, **kwargs):
+        location = cache.get("courier_location", {"lat": 0, "lng": 0})
+        return JsonResponse(location)
 
 
 class FoodAPIViewSet(viewsets.GenericViewSet):
@@ -300,6 +321,25 @@ def kfc_webhook(request):
 
 router = routers.DefaultRouter()
 router.register(prefix="", viewset=FoodAPIViewSet, basename="food")
+
+@csrf_exempt
+def uber_webhook(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+    data = json.loads(request.body)
+    order_id = data["order_id"]
+    lat = data["lat"]
+    lng = data["lng"]
+
+    cache = CacheService()
+    tracking_order = TrackingOrder(**cache.get("orders", str(order_id)))
+    tracking_order.delivery["location"] = {"lat": lat, "lng": lng}
+    cache.set("orders", str(order_id), asdict(tracking_order))
+
+    print(f"[WEBHOOK] Order {order_id} location updated: {lat}, {lng}")
+
+    return JsonResponse({"status": "ok"})
 
 # /food/
 

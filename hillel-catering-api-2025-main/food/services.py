@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from threading import Thread
 from time import sleep
+from .providers.uber import UberClient
 
 from django.db.models import QuerySet
 
@@ -197,89 +198,49 @@ def order_in_kfc(order_id: int, items):
 
 @celery_app.task
 def order_delivery(order_id: int):
-    """Using random provider - start processing delivery orders."""
+    """Start processing delivery orders with Uber simulator."""
 
     print(f"🚚 DELIVERY PROCESSING STARTED")
 
-    provider = uklon.Provider()
     cache = CacheService()
     order = Order.objects.get(id=order_id)
 
-    # update order state
     order.status = OrderStatus.DELIVERY_LOOKUP
     order.save()
 
-    # prepare data for the first request
-    addresses: list[str] = []
-    comments: list[str] = []
-    for rest_name, address in order.delivery_meta():
-        addresses.append(rest_name)
-        comments.append(f"Delivery to the {address}")
+    provider_name = "uber"
 
-    # NOTE: Only UKLON is currently supported so no selection in here
-    #       just update the state here since we know the provider
-    order.status = OrderStatus.DELIVERY
-    order.save()
+    if provider_name == "uber":
+        client = UberClient(order_id)
+        client.start_delivery()
 
-    _response: uklon.OrderResponse = provider.create_order(
-        uklon.OrderRequestBody(addresses=addresses, comments=comments)
-    )
+        order.status = OrderStatus.DELIVERY
+        order.save()
 
-    # update the cache
-    tracking_order = TrackingOrder(**cache.get("orders", str(order_id)))
-    tracking_order.delivery["location"] = _response.location
-
-    # initial status
-    current_status: uklon.OrderStatus = _response.status
-
-    while current_status != uklon.OrderStatus.DELIVERED:
-        response: uklon.OrderResponse = provider.get_order(_response.id)
-
-        print(f"🚙 UKLON [{response.status}]: 📍 {response.location}")
-        if current_status == response.status:
-            sleep(1)
-            continue
-
-        current_status = response.status  # DELIVERY, DELIVERED
-        tracking_order.delivery["location"] = response.location
-
-        # update cache
+        tracking_order = TrackingOrder(**cache.get("orders", str(order_id)))
+        tracking_order.delivery = {
+            "provider": "uber",
+            "status": OrderStatus.DELIVERY,
+            "location": {"lat": 0, "lng": 0},
+        }
         cache.set("orders", str(order_id), asdict(tracking_order))
+        return
 
-    print(f"🏁 UKLON [{response.status}]: 📍 {response.location}")
-
-    # update storage
-    Order.objects.filter(id=order_id).update(status=OrderStatus.DELIVERED)
-
-    # update the cache
-    tracking_order.delivery["status"] = OrderStatus.DELIVERED
-    cache.set("orders", str(order_id), asdict(tracking_order))
+    raise ValueError("Unsupported provider for delivery")
 
 
 def schedule_order(order: Order):
-    # define service3s and data state
+    """Prepare order and start delivery process."""
+
     cache = CacheService()
     tracking_order = TrackingOrder()
 
     items_by_restaurants = order.items_by_restaurant()
     for restaurant, items in items_by_restaurants.items():
-        # update tracking order instance to be saved to the cache
         tracking_order.restaurants[str(restaurant.pk)] = {
             "external_id": None,
             "status": OrderStatus.NOT_STARTED,
         }
 
-    # update cache insatnce only once in the end
     cache.set(namespace="orders", key=str(order.pk), value=asdict(tracking_order))
-
-    # start processing after cache is complete
-    for restaurant, items in items_by_restaurants.items():
-        match restaurant.name.lower():
-            case "silpo":
-                order_in_silpo.delay(order_id=order.pk, items=items)
-            case "kfc":
-                order_in_kfc.delay(order_id=order.pk, items=items)
-            case _:
-                raise ValueError(
-                    f"Restaurant {restaurant.name} is not available for processing"
-                )
+    order_delivery.delay(order_id=order.pk)

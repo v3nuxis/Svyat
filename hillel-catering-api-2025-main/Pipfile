@@ -10,6 +10,7 @@ djangorestframework = "~=3.16.0"  # REST batteries
 djangorestframework-simplejwt = "~=5.5.0"  # JWT Authentication
 psycopg2-binary = "~=2.9.10"
 redis = "~=6.2.0" # Caching
+celery = { version = "==5.4.0", extras = ["redis"] }
 
 [dev-packages]
 black="~=25.1.0"  # formatter
@@ -23,7 +24,8 @@ mypy="~=1.15.0"   # types checking
 uvicorn = "~=0.35.0"
 pydantic = "~=2.11.7"
 httpx = "~=0.28.1"
-celery-types = "*"
+celery-types = "~=0.23.0"
+watchdog = "~=6.0.0"
 
 [requires]
 python_version = "3.13"

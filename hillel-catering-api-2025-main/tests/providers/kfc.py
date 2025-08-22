@@ -1,18 +1,20 @@
-import time
-from typing import Literal
-import httpx
 import random
+import time
 import uuid
+from typing import Literal
 
-from fastapi import FastAPI, BackgroundTasks
+import httpx
+from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
 
 OrderStatus = Literal["not started", "cooking", "cooked", "finished"]
 STORAGE: dict[str, OrderStatus] = {}
-CATERING_API_WEBHOOK_URL = "http://localhost:8000/webhooks/kfc"
+CATERING_API_WEBHOOK_URL = (
+    "http://api:8000/webhooks/kfc/5834eb6c-63b9-4018-b6d3-04e170278ec2/"
+)
 
 
-app = FastAPI()
+app = FastAPI(title="KFC API")
 
 
 class OrderItem(BaseModel):
@@ -35,9 +37,10 @@ async def update_order_status(order_id: str):
             async with httpx.AsyncClient() as client:
                 try:
                     await client.post(
-                        CATERING_API_WEBHOOK_URL, data={"id": order_id, "status": status}
+                        CATERING_API_WEBHOOK_URL,
+                        data={"id": order_id, "status": status},
                     )
-                except httpx.ConnectError as error:
+                except httpx.ConnectError:
                     print("API connection failed")
                 else:
                     print(f"KFC: {CATERING_API_WEBHOOK_URL} notified about {status}")

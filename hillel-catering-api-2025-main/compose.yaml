@@ -24,6 +24,18 @@ services:
       - database
       - cache
       - mailing
+    worker-default:
+      <<: *api
+      container_name: catering-worker-default
+      entrypoint: bash
+      command: -c "watchmedo auto-restart --recursive --pattern='*.py' -- celery -A config worker -l INFO -Q default"
+      ports: []
+    worker-high-priority:
+      <<: *api
+      container_name: catering-worker-high-priority
+      entrypoint: bash
+      command: -c "watchmedo auto-restart --recursive --pattern='*.py' -- celery -A config worker -l INFO -Q high_priority"
+      ports: []
   database:
     image: postgres:17
     env_file:
