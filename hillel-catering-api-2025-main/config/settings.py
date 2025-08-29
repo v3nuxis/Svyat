@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+SECRET_KEY = "Svyat1234"
 DEBUG = bool(os.getenv("DJANGO_DEBUG", ""))
 ALLOWED_HOSTS = ["*"]
 
@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     # local apps
     "users",
     "food",
+    "drf_spectacular"
 ]
 
 MIDDLEWARE = [
@@ -123,6 +124,7 @@ AUTH_USER_MODEL = "users.User"
 
 
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": 'drf_spectacular.openapi.AutoSchema',
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
@@ -132,6 +134,19 @@ REST_FRAMEWORK = {
     # 'PAGE_SIZE': 1
 }
 
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Catering API',
+    'DESCRIPTION': 'API for Food Orders',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+
+RATE_LIMITS = {
+    'default': {
+        'ANON': '100/d',
+        'AUTH': '1000/d',
+    },
+}
 # client -> password + login
 # server -> access token + refresh token
 
@@ -140,6 +155,7 @@ REST_FRAMEWORK = {
 
 # client -> refresh token
 # server -> updated access token + refresh token
+
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=120),

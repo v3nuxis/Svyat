@@ -22,7 +22,7 @@ COPY ./tests/providers ./
 # ==================================================
 
 # SILPO
-from base as silpo
+FROM base as silpo
 
 EXPOSE 8000
 ENTRYPOINT ["python"]
@@ -30,7 +30,7 @@ CMD ["-m", "uvicorn", "silpo:app", "--host", "0.0.0.0"]
 
 
 # KFC
-from base as kfc
+FROM base as kfc
 
 EXPOSE 8000
 ENTRYPOINT ["python"]
@@ -38,15 +38,17 @@ CMD ["-m", "uvicorn", "kfc:app", "--host", "0.0.0.0"]
 
 
 # UKLON
-from base as uklon
+FROM base as uklon
 
 EXPOSE 8000
 ENTRYPOINT ["python"]
 CMD ["-m", "uvicorn", "uklon:app", "--host", "0.0.0.0"]
 
 # UBER
-from base as uber
+FROM base as uber
 
-EXPOSE 8000
-ENTRYPOINT ["python"]
-CMD ["-m", "uvicorn", "uber:app", "--host", "0.0.0.0"]
+WORKDIR /app/
+COPY ./tests/providers/uber.py ./uber.py
+
+
+CMD ["python", "uber.py"]
