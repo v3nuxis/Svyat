@@ -2,7 +2,6 @@ from dataclasses import asdict, dataclass, field
 from threading import Thread
 from time import sleep
 from .providers.uber import UberClient
-
 from django.db.models import QuerySet
 
 from config import celery_app
@@ -11,8 +10,7 @@ from shared.cache import CacheService
 from .enums import OrderStatus
 from .mapper import RESTAURANT_EXTERNAL_TO_INTERNAL
 from .models import Order, OrderItem, Restaurant
-from .providers import kfc, silpo, uklon
-
+from .providers import kfc, silpo
 
 @dataclass
 class TrackingOrder:

@@ -2,12 +2,16 @@ import random
 import time
 import uuid
 from typing import Literal
-from food.tasks import order_in_kfc
 import httpx
 from fastapi import BackgroundTasks, FastAPI
 from pydantic import BaseModel
+import enum
 
-OrderStatus = Literal["not started", "cooking", "cooked", "finished"]
+class OrderStatus(enum.StrEnum):
+    NOT_STARTED = "not started"
+    COOKING = "cooking"
+    COOKED = "cooked"
+    FINISHED = "finished"
 STORAGE: dict[str, OrderStatus] = {}
 CATERING_API_WEBHOOK_URL = "http://localhost:8000/webhooks/kfc/"
 
@@ -16,6 +20,7 @@ app = FastAPI()
 
 class KFCOrder:
     def create_order(self, order_data):
+        from food.tasks import order_in_kfc
         order_in_kfc.apply_async(args = (order_data), priority = 10)
 
 class OrderItem(BaseModel):
